@@ -237,6 +237,47 @@
       </div>
     </div>
 
+    <!-- Travel View -->
+    <div id="view-travel" class="view hidden">
+      <header class="app-header">
+        <button id="btn-travel-back" class="btn-icon btn-back">&#x2190;</button>
+        <h1>&#x2708;&#xFE0F; Reisen</h1>
+        <button id="btn-travel-add-feed" class="btn-icon" title="Feed hinzufuegen" style="font-size:1.8rem;">+</button>
+      </header>
+
+      <div id="travel-next" class="travel-next hidden"></div>
+      <div id="travel-container" class="travel-container"></div>
+
+      <div id="travel-empty" class="empty-state hidden">
+        <div class="empty-icon">&#x2708;&#xFE0F;</div>
+        <p>Keine Reisen geplant.</p>
+        <p class="subtitle">F&uuml;ge einen TripIt-Kalender-Feed hinzu!</p>
+      </div>
+
+      <!-- Travel Feeds List -->
+      <div id="travel-feeds-section" class="travel-feeds-section">
+        <h3 class="travel-feeds-title">Konfigurierte Feeds</h3>
+        <div id="travel-feeds-list"></div>
+      </div>
+
+      <!-- Add Feed Modal -->
+      <div id="modal-travel-feed" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+          <h2>Reise-Feed hinzuf&uuml;gen</h2>
+          <label class="input-label">Familienmitglied</label>
+          <select id="input-travel-member" class="input-select"></select>
+          <label class="input-label mt-1">iCal Feed-URL</label>
+          <input type="url" id="input-travel-url" placeholder="https://www.tripit.com/feed/ical/..." autocomplete="off">
+          <p class="input-hint">TripIt: Profil &rarr; Einstellungen &rarr; Kalender-Feed aktivieren &rarr; URL kopieren</p>
+          <div class="modal-actions">
+            <button class="btn btn-secondary modal-cancel">Abbrechen</button>
+            <button id="btn-save-feed" class="btn btn-primary">Speichern</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Chat View -->
     <div id="view-chat" class="view hidden">
       <header class="app-header">

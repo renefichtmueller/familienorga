@@ -83,15 +83,50 @@ async function buildSystemPrompt(db: D1Database, householdId: string): Promise<s
     .map((n: any) => n.title)
     .join(", ");
 
+  // Get upcoming travel events
+  const today = new Date().toISOString().split("T")[0];
+  const travelEvents = await db
+    .prepare(
+      `SELECT member_name, summary, location, start_date, end_date
+       FROM travel_events_cache
+       WHERE household_id = ? AND end_date >= ?
+       ORDER BY start_date ASC
+       LIMIT 10`
+    )
+    .bind(householdId, today)
+    .all();
+
+  let travelText = "";
+  const travelRows = (travelEvents.results || []) as any[];
+  if (travelRows.length > 0) {
+    // Deduplicate by summary+member
+    const seen = new Set<string>();
+    const unique: any[] = [];
+    for (const t of travelRows) {
+      const key = `${t.member_name}:${t.summary}:${t.start_date}`;
+      if (!seen.has(key)) { seen.add(key); unique.push(t); }
+    }
+    travelText = "\n\nGeplante Reisen:";
+    for (const t of unique) {
+      const start = new Date(t.start_date + "T00:00:00");
+      const end = new Date(t.end_date + "T00:00:00");
+      const startStr = start.toLocaleDateString("de-DE", { day: "numeric", month: "long" });
+      const endStr = end.toLocaleDateString("de-DE", { day: "numeric", month: "long" });
+      const todayDate = new Date(); todayDate.setHours(0, 0, 0, 0);
+      const isNow = todayDate >= start && todayDate <= end;
+      travelText += `\n  - ${t.member_name}: ${t.summary}${t.location ? " (" + t.location + ")" : ""}, ${startStr}–${endStr}${isNow ? " [GERADE UNTERWEGS]" : ""}`;
+    }
+  }
+
   return `Du bist der freundliche Familien-Assistent fuer ${familyName}.
 Mitglieder: ${memberList || "noch keine eingetragen"}.
 Antworte immer auf Deutsch, kurz und hilfreich. Nutze Emojis sparsam.
 Heute ist ${new Date().toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}.
 
 Aktuelle offene Eintraege:${itemsText || "\n  Keine offenen Eintraege."}
-${notesText ? `\nNotizen: ${notesText}` : ""}
+${notesText ? `\nNotizen: ${notesText}` : ""}${travelText}
 
-Du kannst bei Fragen zum Familienalltag helfen, Rezepte vorschlagen, an Termine erinnern, beim Planen helfen oder einfach nett plaudern.`;
+Du kannst bei Fragen zum Familienalltag helfen, Rezepte vorschlagen, an Termine erinnern, beim Planen helfen, Reisefragen beantworten oder einfach nett plaudern.`;
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {

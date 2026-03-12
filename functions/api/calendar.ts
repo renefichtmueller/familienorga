@@ -131,5 +131,54 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     return a.due_time.localeCompare(b.due_time);
   });
 
-  return Response.json({ items: expanded, year, month });
+  // ── Travel events from cache ──
+  const monthStartStr = `${year}-${String(month).padStart(2, "0")}-01`;
+  const monthEndStr = `${year}-${String(month).padStart(2, "0")}-${new Date(year, month, 0).getDate()}`;
+
+  const travelRows = await context.env.DB
+    .prepare(
+      `SELECT member_name, summary, location, start_date, end_date
+       FROM travel_events_cache
+       WHERE household_id = ?
+         AND start_date <= ? AND end_date >= ?
+       ORDER BY start_date ASC`
+    )
+    .bind(householdId, monthEndStr, monthStartStr)
+    .all();
+
+  // Expand multi-day travel events into per-day entries for the calendar
+  const travelEvents: Array<{
+    type: string;
+    member_name: string;
+    summary: string;
+    location: string | null;
+    start_date: string;
+    end_date: string;
+    due_date: string;
+  }> = [];
+
+  for (const row of (travelRows.results || []) as any[]) {
+    const start = new Date(Math.max(
+      new Date(row.start_date + "T00:00:00").getTime(),
+      new Date(monthStartStr + "T00:00:00").getTime()
+    ));
+    const end = new Date(Math.min(
+      new Date(row.end_date + "T00:00:00").getTime(),
+      new Date(monthEndStr + "T00:00:00").getTime()
+    ));
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      travelEvents.push({
+        type: "travel",
+        member_name: row.member_name,
+        summary: row.summary,
+        location: row.location,
+        start_date: row.start_date,
+        end_date: row.end_date,
+        due_date: d.toISOString().split("T")[0],
+      });
+    }
+  }
+
+  return Response.json({ items: expanded, travel: travelEvents, year, month });
 };

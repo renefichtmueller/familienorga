@@ -78,3 +78,29 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_chat_household ON chat_messages(household_id);
+
+CREATE TABLE IF NOT EXISTS travel_feeds (
+  id TEXT PRIMARY KEY,
+  household_id TEXT NOT NULL REFERENCES households(id),
+  member_name TEXT NOT NULL,
+  feed_url TEXT NOT NULL,
+  label TEXT DEFAULT 'TripIt',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS travel_events_cache (
+  id TEXT PRIMARY KEY,
+  household_id TEXT NOT NULL,
+  member_name TEXT NOT NULL,
+  uid TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  location TEXT,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  description TEXT,
+  cached_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_travel_feeds_household ON travel_feeds(household_id);
+CREATE INDEX IF NOT EXISTS idx_travel_cache_household ON travel_events_cache(household_id);
+CREATE INDEX IF NOT EXISTS idx_travel_cache_dates ON travel_events_cache(start_date, end_date);

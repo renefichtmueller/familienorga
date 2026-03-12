@@ -153,6 +153,8 @@ async function joinHousehold() {
   showToast("Erfolgreich beigetreten!");
   await loadMembers();
   loadLists();
+  // Pre-load travel subtitle for main page card
+  setTimeout(updateTravelSubtitle, 500);
 }
 
 // === Lists ===
@@ -216,6 +218,13 @@ function renderLists() {
           <span class="special-card-subtitle">Termine</span>
         </div>
       </div>
+      <div class="special-card" id="btn-open-travel">
+        <span class="special-card-icon">\u{2708}\u{FE0F}</span>
+        <div class="special-card-text">
+          <span class="special-card-title">Reisen</span>
+          <span class="special-card-subtitle" id="travel-card-subtitle">TripIt</span>
+        </div>
+      </div>
       <div class="special-card" id="btn-open-chat">
         <span class="special-card-icon">\u{1F916}</span>
         <div class="special-card-text">
@@ -265,6 +274,7 @@ function renderLists() {
 
   document.getElementById("btn-open-notes").addEventListener("click", openNotes);
   document.getElementById("btn-open-calendar").addEventListener("click", openCalendar);
+  document.getElementById("btn-open-travel").addEventListener("click", openTravel);
   document.getElementById("btn-open-chat").addEventListener("click", openChat);
 }
 
@@ -1130,8 +1140,10 @@ async function loadCalendarData() {
   try {
     const data = await api(`calendar?year=${state.calYear}&month=${state.calMonth}`);
     state.calItems = data.items || [];
+    state.calTravel = data.travel || [];
   } catch {
     state.calItems = [];
+    state.calTravel = [];
   }
   renderCalendar();
 }
@@ -1161,6 +1173,17 @@ function renderCalendar() {
     itemsByDate[item.due_date].push(item);
   }
 
+  // Group travel events by date
+  const travelByDate = {};
+  for (const t of (state.calTravel || [])) {
+    if (!travelByDate[t.due_date]) travelByDate[t.due_date] = [];
+    // Deduplicate by summary+member per day
+    const key = `${t.member_name}:${t.summary}`;
+    if (!travelByDate[t.due_date].find((x) => `${x.member_name}:${x.summary}` === key)) {
+      travelByDate[t.due_date].push(t);
+    }
+  }
+
   // Previous month padding
   const prevMonthDays = new Date(state.calYear, state.calMonth - 1, 0).getDate();
   for (let i = startDow - 1; i >= 0; i--) {
@@ -1178,19 +1201,26 @@ function renderCalendar() {
     div.className = "cal-day" + (dateStr === todayStr ? " today" : "");
 
     let dotsHtml = "";
-    const dayItems = itemsByDate[dateStr];
-    if (dayItems && dayItems.length > 0) {
+    const dayItems = itemsByDate[dateStr] || [];
+    const dayTravel = travelByDate[dateStr] || [];
+
+    if (dayTravel.length > 0) {
+      dotsHtml += `<div class="cal-travel-indicator">\u{2708}\u{FE0F}</div>`;
+      div.classList.add("cal-day-travel");
+    }
+
+    if (dayItems.length > 0) {
       const dots = dayItems.slice(0, 4).map((item) => {
         const color = item.assigned_to ? getMemberColor(item.assigned_to) : "var(--primary)";
         return `<span class="cal-dot" style="background:${color}"></span>`;
       }).join("");
-      dotsHtml = `<div class="cal-dots">${dots}</div>`;
+      dotsHtml += `<div class="cal-dots">${dots}</div>`;
     }
 
     div.innerHTML = `<span class="cal-day-number">${d}</span>${dotsHtml}`;
 
-    if (dayItems && dayItems.length > 0) {
-      div.addEventListener("click", () => openDayDetail(dateStr, dayItems));
+    if (dayItems.length > 0 || dayTravel.length > 0) {
+      div.addEventListener("click", () => openDayDetail(dateStr, dayItems, dayTravel));
     }
 
     container.appendChild(div);
@@ -1207,13 +1237,33 @@ function renderCalendar() {
   }
 }
 
-function openDayDetail(dateStr, items) {
+function openDayDetail(dateStr, items, travelEvents) {
   const date = new Date(dateStr + "T00:00:00");
   const title = date.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
   document.getElementById("day-detail-title").textContent = title;
 
   const container = document.getElementById("day-detail-items");
-  container.innerHTML = items.map((item) => {
+  let html = "";
+
+  // Travel events first
+  if (travelEvents && travelEvents.length > 0) {
+    html += travelEvents.map((t) => {
+      const memberColor = getMemberColor(t.member_name);
+      return `
+        <div class="day-item day-item-travel" style="border-left-color: ${memberColor}">
+          <span class="day-item-time">\u{2708}\u{FE0F}</span>
+          <div>
+            <div class="day-item-name">${escapeHtml(t.summary)}</div>
+            <div class="day-item-list">${escapeHtml(t.member_name)}${t.location ? " \u2022 \u{1F4CD} " + escapeHtml(t.location) : ""}</div>
+            <div class="day-item-list" style="opacity:0.6">${formatDateRange(t.start_date, t.end_date)}</div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  // Regular items
+  html += items.map((item) => {
     const color = item.assigned_to ? getMemberColor(item.assigned_to) : "var(--primary)";
     return `
       <div class="day-item" style="border-left-color: ${color}">
@@ -1226,6 +1276,7 @@ function openDayDetail(dateStr, items) {
     `;
   }).join("");
 
+  container.innerHTML = html;
   showModal("day-detail");
 }
 
@@ -1426,6 +1477,207 @@ if ("serviceWorker" in navigator) {
       subscribePush();
     }
   }).catch(() => {});
+}
+
+// === Travel / TripIt ===
+state.travelEvents = [];
+state.travelFeeds = [];
+
+async function openTravel() {
+  showView("travel");
+  await loadTravelData();
+
+  document.getElementById("btn-travel-back").onclick = () => { showView("lists"); renderLists(); };
+  document.getElementById("btn-travel-add-feed").onclick = () => openTravelFeedModal();
+  document.getElementById("btn-save-feed").onclick = saveTravelFeed;
+}
+
+async function loadTravelData() {
+  try {
+    const data = await api("travel");
+    state.travelEvents = data.events || [];
+    state.travelFeeds = data.feeds || [];
+  } catch {
+    state.travelEvents = [];
+    state.travelFeeds = [];
+  }
+  renderTravel();
+}
+
+function renderTravel() {
+  const container = document.getElementById("travel-container");
+  const emptyEl = document.getElementById("travel-empty");
+  const nextEl = document.getElementById("travel-next");
+  const feedsList = document.getElementById("travel-feeds-list");
+
+  // Feeds section
+  if (state.travelFeeds.length > 0) {
+    feedsList.innerHTML = state.travelFeeds.map((f) => `
+      <div class="travel-feed-row">
+        <span class="travel-feed-member">${escapeHtml(f.member_name)}</span>
+        <span class="travel-feed-label">${escapeHtml(f.label)}</span>
+        <button class="btn-icon btn-danger-icon travel-feed-delete" data-id="${f.id}" title="Entfernen">\u{1F5D1}\u{FE0F}</button>
+      </div>
+    `).join("");
+
+    feedsList.querySelectorAll(".travel-feed-delete").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await api(`travel?id=${btn.dataset.id}`, { method: "DELETE" });
+        await loadTravelData();
+      });
+    });
+    document.getElementById("travel-feeds-section").classList.remove("hidden");
+  } else {
+    document.getElementById("travel-feeds-section").classList.add("hidden");
+  }
+
+  if (state.travelEvents.length === 0) {
+    nextEl.classList.add("hidden");
+    container.innerHTML = "";
+    emptyEl.classList.remove("hidden");
+    return;
+  }
+
+  emptyEl.classList.add("hidden");
+
+  // Group overlapping events into trips
+  const trips = groupTrips(state.travelEvents);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Next trip countdown
+  const upcoming = trips.find((t) => new Date(t.end_date + "T23:59:59") >= today);
+  if (upcoming) {
+    const start = new Date(upcoming.start_date + "T00:00:00");
+    const diffDays = Math.ceil((start - today) / 86400000);
+    let countdownText;
+    if (diffDays < 0) {
+      countdownText = "Gerade unterwegs";
+    } else if (diffDays === 0) {
+      countdownText = "Heute!";
+    } else if (diffDays === 1) {
+      countdownText = "Morgen";
+    } else {
+      countdownText = `in ${diffDays} Tagen`;
+    }
+
+    const memberColor = getMemberColor(upcoming.member_name);
+    nextEl.innerHTML = `
+      <div class="travel-next-card" style="border-left-color: ${memberColor}">
+        <div class="travel-next-header">
+          <span class="travel-countdown-badge">${countdownText}</span>
+          <span class="travel-next-member" style="color: ${memberColor}">${escapeHtml(upcoming.member_name)}</span>
+        </div>
+        <div class="travel-next-title">${escapeHtml(upcoming.summary)}</div>
+        ${upcoming.location ? `<div class="travel-next-location">\u{1F4CD} ${escapeHtml(upcoming.location)}</div>` : ""}
+        <div class="travel-next-dates">${formatDateRange(upcoming.start_date, upcoming.end_date)}</div>
+      </div>
+    `;
+    nextEl.classList.remove("hidden");
+  } else {
+    nextEl.classList.add("hidden");
+  }
+
+  // All trips timeline
+  container.innerHTML = trips.map((trip) => {
+    const memberColor = getMemberColor(trip.member_name);
+    const isPast = new Date(trip.end_date + "T23:59:59") < today;
+    return `
+      <div class="travel-card${isPast ? " travel-past" : ""}" style="border-left-color: ${memberColor}">
+        <div class="travel-card-header">
+          <span class="travel-card-dates">${formatDateRange(trip.start_date, trip.end_date)}</span>
+          <span class="travel-card-member" style="color: ${memberColor}">${escapeHtml(trip.member_name)}</span>
+        </div>
+        <div class="travel-card-title">${escapeHtml(trip.summary)}</div>
+        ${trip.location ? `<div class="travel-card-location">\u{1F4CD} ${escapeHtml(trip.location)}</div>` : ""}
+      </div>
+    `;
+  }).join("");
+}
+
+function groupTrips(events) {
+  // Deduplicate by uid (multi-day events come as one entry from travel API)
+  const seen = new Map();
+  for (const ev of events) {
+    const key = `${ev.member_name}:${ev.summary}:${ev.start_date}:${ev.end_date}`;
+    if (!seen.has(key)) {
+      seen.set(key, ev);
+    }
+  }
+  return Array.from(seen.values()).sort((a, b) => a.start_date.localeCompare(b.start_date));
+}
+
+function formatDateRange(start, end) {
+  const s = new Date(start + "T00:00:00");
+  const e = new Date(end + "T00:00:00");
+  const opts = { day: "numeric", month: "short" };
+  if (start === end) {
+    return s.toLocaleDateString("de-DE", { ...opts, year: "numeric" });
+  }
+  if (s.getFullYear() === e.getFullYear()) {
+    return `${s.toLocaleDateString("de-DE", opts)} \u2013 ${e.toLocaleDateString("de-DE", { ...opts, year: "numeric" })}`;
+  }
+  return `${s.toLocaleDateString("de-DE", { ...opts, year: "numeric" })} \u2013 ${e.toLocaleDateString("de-DE", { ...opts, year: "numeric" })}`;
+}
+
+function openTravelFeedModal() {
+  // Populate member dropdown
+  const select = document.getElementById("input-travel-member");
+  select.innerHTML = (state.members || []).map((m) =>
+    `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}</option>`
+  ).join("");
+  if (select.options.length === 0) {
+    select.innerHTML = `<option value="">Erst Mitglieder hinzufuegen</option>`;
+  }
+  document.getElementById("input-travel-url").value = "";
+  showModal("travel-feed");
+}
+
+async function saveTravelFeed() {
+  const memberName = document.getElementById("input-travel-member").value;
+  const feedUrl = document.getElementById("input-travel-url").value.trim();
+  if (!memberName || !feedUrl) {
+    showToast("Bitte Mitglied und URL angeben");
+    return;
+  }
+  try {
+    await api("travel", {
+      method: "POST",
+      body: { member_name: memberName, feed_url: feedUrl },
+    });
+    closeAllModals();
+    showToast("Feed gespeichert!");
+    await loadTravelData();
+  } catch (err) {
+    showToast("Fehler: " + (err.message || "Feed konnte nicht gespeichert werden"));
+  }
+}
+
+// Update travel subtitle on main page
+async function updateTravelSubtitle() {
+  try {
+    const data = await api("travel");
+    const events = data.events || [];
+    const sub = document.getElementById("travel-card-subtitle");
+    if (!sub) return;
+    if (events.length === 0) {
+      sub.textContent = "TripIt";
+    } else {
+      const today = new Date().toISOString().split("T")[0];
+      const upcoming = events.find((e) => e.end_date >= today);
+      if (upcoming) {
+        const start = new Date(upcoming.start_date + "T00:00:00");
+        const diff = Math.ceil((start - new Date().setHours(0,0,0,0)) / 86400000);
+        if (diff <= 0) sub.textContent = "Unterwegs!";
+        else if (diff === 1) sub.textContent = "Morgen!";
+        else sub.textContent = `in ${diff} Tagen`;
+      } else {
+        sub.textContent = `${events.length} Reisen`;
+      }
+    }
+  } catch {
+    // silent
+  }
 }
 
 document.addEventListener("DOMContentLoaded", init);
