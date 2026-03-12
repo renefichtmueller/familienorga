@@ -330,6 +330,52 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   return Response.json({ id, success: true });
 };
 
+// ── PATCH: update a travel feed ──
+export const onRequestPatch: PagesFunction<Env> = async (context) => {
+  const householdId = context.request.headers.get("X-Household-Id");
+  if (!householdId) {
+    return Response.json({ error: "Household-ID fehlt" }, { status: 401 });
+  }
+
+  const body = (await context.request.json()) as {
+    id: string;
+    feed_url?: string;
+    member_name?: string;
+    label?: string;
+  };
+
+  if (!body.id) {
+    return Response.json({ error: "Feed ID fehlt" }, { status: 400 });
+  }
+
+  if (body.feed_url) {
+    try { new URL(body.feed_url); } catch {
+      return Response.json({ error: "Ungueltige URL" }, { status: 400 });
+    }
+  }
+
+  // Build dynamic UPDATE
+  const sets: string[] = [];
+  const vals: string[] = [];
+  if (body.feed_url) { sets.push("feed_url = ?"); vals.push(body.feed_url); }
+  if (body.member_name) { sets.push("member_name = ?"); vals.push(body.member_name); }
+  if (body.label) { sets.push("label = ?"); vals.push(body.label); }
+
+  if (sets.length === 0) {
+    return Response.json({ error: "Nichts zu aendern" }, { status: 400 });
+  }
+
+  await context.env.DB
+    .prepare(`UPDATE travel_feeds SET ${sets.join(", ")} WHERE id = ? AND household_id = ?`)
+    .bind(...vals, body.id, householdId)
+    .run();
+
+  // Force cache refresh with new URL
+  await refreshCache(context.env.DB, householdId);
+
+  return Response.json({ success: true });
+};
+
 // ── DELETE: remove a travel feed ──
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
   const householdId = context.request.headers.get("X-Household-Id");

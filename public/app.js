@@ -35,6 +35,24 @@ const CATEGORY_ICONS = {
 
 const DEFAULT_CATEGORIES = ["Einkauf", "Aufgaben", "Termine", "Wuensche", "Garten", "Reparaturen"];
 
+// === Visibility Settings ===
+function getVisibility() {
+  try {
+    return JSON.parse(localStorage.getItem("visibility") || "{}");
+  } catch { return {}; }
+}
+function isVisible(key) {
+  const vis = getVisibility();
+  return vis[key] !== false; // default: visible
+}
+function applyVisibility() {
+  const ids = { notes: "btn-open-notes", calendar: "btn-open-calendar", travel: "btn-open-travel", chat: "btn-open-chat" };
+  for (const [key, id] of Object.entries(ids)) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isVisible(key) ? "" : "none";
+  }
+}
+
 // Categories that show assignment picker
 const ASSIGNABLE_CATEGORIES = ["Aufgaben", "Einkauf"];
 // Categories that show date/time picker
@@ -276,6 +294,9 @@ function renderLists() {
   document.getElementById("btn-open-calendar").addEventListener("click", openCalendar);
   document.getElementById("btn-open-travel").addEventListener("click", openTravel);
   document.getElementById("btn-open-chat").addEventListener("click", openChat);
+
+  // Apply visibility settings (hide cards user turned off)
+  applyVisibility();
 }
 
 async function createList() {
@@ -1012,7 +1033,23 @@ function init() {
   document.getElementById("btn-settings").addEventListener("click", () => {
     document.getElementById("settings-code").textContent = state.shareCode || "\u2014";
     renderMembersList();
+    // Load visibility toggles from localStorage
+    const vis = getVisibility();
+    document.getElementById("toggle-notes").checked = vis.notes;
+    document.getElementById("toggle-calendar").checked = vis.calendar;
+    document.getElementById("toggle-travel").checked = vis.travel;
+    document.getElementById("toggle-chat").checked = vis.chat;
     showModal("settings");
+  });
+
+  // Visibility toggle listeners — save on change
+  ["notes", "calendar", "travel", "chat"].forEach((key) => {
+    document.getElementById(`toggle-${key}`).addEventListener("change", (e) => {
+      const vis = getVisibility();
+      vis[key] = e.target.checked;
+      localStorage.setItem("visibility", JSON.stringify(vis));
+      applyVisibility();
+    });
   });
   document.getElementById("btn-add-member").addEventListener("click", addMember);
   document.getElementById("input-new-member").addEventListener("keydown", (e) => {
@@ -1514,8 +1551,11 @@ function renderTravel() {
   if (state.travelFeeds.length > 0) {
     feedsList.innerHTML = state.travelFeeds.map((f) => `
       <div class="travel-feed-row">
-        <span class="travel-feed-member">${escapeHtml(f.member_name)}</span>
-        <span class="travel-feed-label">${escapeHtml(f.label)}</span>
+        <div class="travel-feed-info">
+          <span class="travel-feed-member">${escapeHtml(f.member_name)}</span>
+          <span class="travel-feed-url">${escapeHtml((f.feed_url || "").substring(0, 45))}${(f.feed_url || "").length > 45 ? "..." : ""}</span>
+        </div>
+        <button class="btn-icon travel-feed-edit-btn" data-id="${f.id}" data-url="${encodeURIComponent(f.feed_url || "")}" data-member="${escapeHtml(f.member_name)}" title="Bearbeiten">\u{270F}\u{FE0F}</button>
         <button class="btn-icon btn-danger-icon travel-feed-delete" data-id="${f.id}" title="Entfernen">\u{1F5D1}\u{FE0F}</button>
       </div>
     `).join("");
@@ -1523,7 +1563,13 @@ function renderTravel() {
     feedsList.querySelectorAll(".travel-feed-delete").forEach((btn) => {
       btn.addEventListener("click", async () => {
         await api(`travel?id=${btn.dataset.id}`, { method: "DELETE" });
+        showToast("Feed entfernt");
         await loadTravelData();
+      });
+    });
+    feedsList.querySelectorAll(".travel-feed-edit-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        openEditFeedModal(btn.dataset.id, btn.dataset.member, decodeURIComponent(btn.dataset.url));
       });
     });
     document.getElementById("travel-feeds-section").classList.remove("hidden");
@@ -1620,8 +1666,10 @@ function formatDateRange(start, end) {
   return `${s.toLocaleDateString("de-DE", { ...opts, year: "numeric" })} \u2013 ${e.toLocaleDateString("de-DE", { ...opts, year: "numeric" })}`;
 }
 
+state.editingFeedId = null;
+
 function openTravelFeedModal() {
-  // Populate member dropdown
+  state.editingFeedId = null;
   const select = document.getElementById("input-travel-member");
   select.innerHTML = (state.members || []).map((m) =>
     `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)}</option>`
@@ -1633,6 +1681,16 @@ function openTravelFeedModal() {
   showModal("travel-feed");
 }
 
+function openEditFeedModal(feedId, memberName, feedUrl) {
+  state.editingFeedId = feedId;
+  const select = document.getElementById("input-travel-member");
+  select.innerHTML = (state.members || []).map((m) =>
+    `<option value="${escapeHtml(m.name)}"${m.name === memberName ? " selected" : ""}>${escapeHtml(m.name)}</option>`
+  ).join("");
+  document.getElementById("input-travel-url").value = feedUrl || "";
+  showModal("travel-feed");
+}
+
 async function saveTravelFeed() {
   const memberName = document.getElementById("input-travel-member").value;
   const feedUrl = document.getElementById("input-travel-url").value.trim();
@@ -1641,12 +1699,23 @@ async function saveTravelFeed() {
     return;
   }
   try {
-    await api("travel", {
-      method: "POST",
-      body: { member_name: memberName, feed_url: feedUrl },
-    });
+    if (state.editingFeedId) {
+      // Update existing feed
+      await api("travel", {
+        method: "PATCH",
+        body: { id: state.editingFeedId, member_name: memberName, feed_url: feedUrl },
+      });
+      showToast("Feed aktualisiert!");
+    } else {
+      // Create new feed
+      await api("travel", {
+        method: "POST",
+        body: { member_name: memberName, feed_url: feedUrl },
+      });
+      showToast("Feed gespeichert!");
+    }
+    state.editingFeedId = null;
     closeAllModals();
-    showToast("Feed gespeichert!");
     await loadTravelData();
   } catch (err) {
     showToast("Fehler: " + (err.message || "Feed konnte nicht gespeichert werden"));
