@@ -200,6 +200,59 @@
       </div>
     </div>
 
+    <!-- Calendar View -->
+    <div id="view-calendar" class="view hidden">
+      <header class="app-header">
+        <button id="btn-cal-back" class="btn-icon btn-back">&#x2190;</button>
+        <h1>&#x1F4C5; Kalender</h1>
+      </header>
+
+      <div class="cal-nav">
+        <button id="btn-cal-prev" class="btn-icon cal-arrow">&#x276E;</button>
+        <span id="cal-month-label" class="cal-month-label"></span>
+        <button id="btn-cal-next" class="btn-icon cal-arrow">&#x276F;</button>
+      </div>
+
+      <div class="cal-grid">
+        <div class="cal-weekday">Mo</div>
+        <div class="cal-weekday">Di</div>
+        <div class="cal-weekday">Mi</div>
+        <div class="cal-weekday">Do</div>
+        <div class="cal-weekday">Fr</div>
+        <div class="cal-weekday">Sa</div>
+        <div class="cal-weekday">So</div>
+        <div id="cal-days" class="cal-days-container"></div>
+      </div>
+
+      <!-- Day Detail Modal -->
+      <div id="modal-day-detail" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+          <h2 id="day-detail-title"></h2>
+          <div id="day-detail-items" class="day-detail-items"></div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary modal-cancel">Schliessen</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat View -->
+    <div id="view-chat" class="view hidden">
+      <header class="app-header">
+        <button id="btn-chat-back" class="btn-icon btn-back">&#x2190;</button>
+        <h1>&#x1F916; Assistent</h1>
+      </header>
+
+      <div id="chat-messages" class="chat-messages"></div>
+
+      <div class="chat-input-row">
+        <input type="text" id="input-chat" placeholder="Nachricht eingeben..."
+               autocomplete="off" enterkeyhint="send">
+        <button id="btn-chat-send" class="btn btn-primary btn-chat-send">&#x27A4;</button>
+      </div>
+    </div>
+
     <!-- Note Detail -->
     <div id="view-note-detail" class="view hidden">
       <header class="app-header">

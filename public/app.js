@@ -199,15 +199,30 @@ function renderLists() {
 
   let html = "";
 
-  // Notes button at top
+  // Special cards row: Notes, Calendar, Chat
   html += `
-    <div class="notes-card" id="btn-open-notes">
-      <span class="notes-card-icon">\u{1F4DD}</span>
-      <div class="notes-card-info">
-        <div class="notes-card-name">Notizen & Merkliste</div>
-        <div class="notes-card-hint">Passwoerter, Groessen, Rezepte...</div>
+    <div class="special-cards-row">
+      <div class="special-card" id="btn-open-notes">
+        <span class="special-card-icon">\u{1F4DD}</span>
+        <div class="special-card-text">
+          <span class="special-card-title">Notizen</span>
+          <span class="special-card-subtitle">Merkliste</span>
+        </div>
       </div>
-      <span class="list-card-arrow">\u203A</span>
+      <div class="special-card" id="btn-open-calendar">
+        <span class="special-card-icon">\u{1F4C5}</span>
+        <div class="special-card-text">
+          <span class="special-card-title">Kalender</span>
+          <span class="special-card-subtitle">Termine</span>
+        </div>
+      </div>
+      <div class="special-card" id="btn-open-chat">
+        <span class="special-card-icon">\u{1F916}</span>
+        <div class="special-card-text">
+          <span class="special-card-title">Assistent</span>
+          <span class="special-card-subtitle">AI Chat</span>
+        </div>
+      </div>
     </div>
   `;
 
@@ -249,6 +264,8 @@ function renderLists() {
   });
 
   document.getElementById("btn-open-notes").addEventListener("click", openNotes);
+  document.getElementById("btn-open-calendar").addEventListener("click", openCalendar);
+  document.getElementById("btn-open-chat").addEventListener("click", openChat);
 }
 
 async function createList() {
@@ -1031,6 +1048,18 @@ function init() {
     if (e.key === "Enter") createNote();
   });
 
+  // Calendar view
+  document.getElementById("btn-cal-back").addEventListener("click", loadLists);
+  document.getElementById("btn-cal-prev").addEventListener("click", () => calNavigate(-1));
+  document.getElementById("btn-cal-next").addEventListener("click", () => calNavigate(1));
+
+  // Chat view
+  document.getElementById("btn-chat-back").addEventListener("click", loadLists);
+  document.getElementById("btn-chat-send").addEventListener("click", sendChatMessage);
+  document.getElementById("input-chat").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendChatMessage();
+  });
+
   // Note detail view
   document.getElementById("btn-note-back").addEventListener("click", () => {
     saveNote();
@@ -1071,6 +1100,255 @@ function init() {
       startPolling();
     }
   });
+}
+
+// === Calendar ===
+const MONTH_NAMES = [
+  "Januar", "Februar", "Maerz", "April", "Mai", "Juni",
+  "Juli", "August", "September", "Oktober", "November", "Dezember",
+];
+
+state.calYear = new Date().getFullYear();
+state.calMonth = new Date().getMonth() + 1;
+state.calItems = [];
+
+async function openCalendar() {
+  showView("calendar");
+  state.calYear = new Date().getFullYear();
+  state.calMonth = new Date().getMonth() + 1;
+  await loadCalendarData();
+}
+
+function calNavigate(delta) {
+  state.calMonth += delta;
+  if (state.calMonth > 12) { state.calMonth = 1; state.calYear++; }
+  if (state.calMonth < 1) { state.calMonth = 12; state.calYear--; }
+  loadCalendarData();
+}
+
+async function loadCalendarData() {
+  try {
+    const data = await api(`calendar?year=${state.calYear}&month=${state.calMonth}`);
+    state.calItems = data.items || [];
+  } catch {
+    state.calItems = [];
+  }
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const label = document.getElementById("cal-month-label");
+  label.textContent = `${MONTH_NAMES[state.calMonth - 1]} ${state.calYear}`;
+
+  const container = document.getElementById("cal-days");
+  container.innerHTML = "";
+
+  const firstDay = new Date(state.calYear, state.calMonth - 1, 1);
+  const lastDay = new Date(state.calYear, state.calMonth, 0);
+  const daysInMonth = lastDay.getDate();
+
+  // Monday=0 based start
+  let startDow = firstDay.getDay() - 1;
+  if (startDow < 0) startDow = 6;
+
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+  // Group items by date
+  const itemsByDate = {};
+  for (const item of state.calItems) {
+    if (!itemsByDate[item.due_date]) itemsByDate[item.due_date] = [];
+    itemsByDate[item.due_date].push(item);
+  }
+
+  // Previous month padding
+  const prevMonthDays = new Date(state.calYear, state.calMonth - 1, 0).getDate();
+  for (let i = startDow - 1; i >= 0; i--) {
+    const day = prevMonthDays - i;
+    const div = document.createElement("div");
+    div.className = "cal-day other-month";
+    div.innerHTML = `<span class="cal-day-number">${day}</span>`;
+    container.appendChild(div);
+  }
+
+  // Current month days
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${state.calYear}-${String(state.calMonth).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const div = document.createElement("div");
+    div.className = "cal-day" + (dateStr === todayStr ? " today" : "");
+
+    let dotsHtml = "";
+    const dayItems = itemsByDate[dateStr];
+    if (dayItems && dayItems.length > 0) {
+      const dots = dayItems.slice(0, 4).map((item) => {
+        const color = item.assigned_to ? getMemberColor(item.assigned_to) : "var(--primary)";
+        return `<span class="cal-dot" style="background:${color}"></span>`;
+      }).join("");
+      dotsHtml = `<div class="cal-dots">${dots}</div>`;
+    }
+
+    div.innerHTML = `<span class="cal-day-number">${d}</span>${dotsHtml}`;
+
+    if (dayItems && dayItems.length > 0) {
+      div.addEventListener("click", () => openDayDetail(dateStr, dayItems));
+    }
+
+    container.appendChild(div);
+  }
+
+  // Next month padding
+  const totalCells = startDow + daysInMonth;
+  const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+  for (let i = 1; i <= remaining; i++) {
+    const div = document.createElement("div");
+    div.className = "cal-day other-month";
+    div.innerHTML = `<span class="cal-day-number">${i}</span>`;
+    container.appendChild(div);
+  }
+}
+
+function openDayDetail(dateStr, items) {
+  const date = new Date(dateStr + "T00:00:00");
+  const title = date.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
+  document.getElementById("day-detail-title").textContent = title;
+
+  const container = document.getElementById("day-detail-items");
+  container.innerHTML = items.map((item) => {
+    const color = item.assigned_to ? getMemberColor(item.assigned_to) : "var(--primary)";
+    return `
+      <div class="day-item" style="border-left-color: ${color}">
+        <span class="day-item-time">${item.due_time || ""}</span>
+        <div>
+          <div class="day-item-name">${escapeHtml(item.name)}</div>
+          <div class="day-item-list">${item.list_emoji} ${escapeHtml(item.list_name)}${item.assigned_to ? " \u2022 " + escapeHtml(item.assigned_to) : ""}</div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  showModal("day-detail");
+}
+
+// === AI Chat ===
+state.chatMessages = [];
+state.chatLoading = false;
+
+async function openChat() {
+  showView("chat");
+  if (state.chatMessages.length === 0) {
+    await loadChatHistory();
+  }
+  scrollChatBottom();
+  setTimeout(() => document.getElementById("input-chat").focus(), 100);
+}
+
+async function loadChatHistory() {
+  try {
+    const data = await api("chat");
+    state.chatMessages = data.messages || [];
+  } catch {
+    state.chatMessages = [];
+  }
+  renderChatMessages();
+}
+
+function renderChatMessages() {
+  const container = document.getElementById("chat-messages");
+
+  if (state.chatMessages.length === 0) {
+    container.innerHTML = `
+      <div class="chat-bubble system">
+        Hallo! Ich bin euer Familien-Assistent. \u{1F44B}<br>
+        Frag mich was zum Einkauf, zu Terminen oder lass uns gemeinsam planen!
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = state.chatMessages.map((msg) => {
+    const timeStr = msg.created_at
+      ? new Date(msg.created_at + "Z").toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
+      : "";
+    return `
+      <div class="chat-bubble ${msg.role}">
+        ${escapeHtml(msg.content).replace(/\n/g, "<br>")}
+        ${timeStr ? `<span class="chat-time">${timeStr}</span>` : ""}
+      </div>
+    `;
+  }).join("");
+
+  scrollChatBottom();
+}
+
+function scrollChatBottom() {
+  const container = document.getElementById("chat-messages");
+  requestAnimationFrame(() => {
+    container.scrollTop = container.scrollHeight;
+  });
+}
+
+function showTypingIndicator() {
+  const container = document.getElementById("chat-messages");
+  const indicator = document.createElement("div");
+  indicator.className = "typing-indicator";
+  indicator.id = "typing-indicator";
+  indicator.innerHTML = "<span></span><span></span><span></span>";
+  container.appendChild(indicator);
+  scrollChatBottom();
+}
+
+function removeTypingIndicator() {
+  const el = document.getElementById("typing-indicator");
+  if (el) el.remove();
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById("input-chat");
+  const message = input.value.trim();
+  if (!message || state.chatLoading) return;
+
+  input.value = "";
+  state.chatLoading = true;
+
+  // Add user message immediately
+  const userMsg = { role: "user", content: message, created_at: new Date().toISOString() };
+  state.chatMessages.push(userMsg);
+  renderChatMessages();
+  showTypingIndicator();
+
+  try {
+    // Send last 10 messages as history context
+    const history = state.chatMessages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .slice(-10)
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    const data = await api("chat", {
+      method: "POST",
+      body: { message, history: history.slice(0, -1) }, // exclude current message
+    });
+
+    removeTypingIndicator();
+
+    const assistantMsg = {
+      role: "assistant",
+      content: data.reply || "Entschuldigung, ich konnte keine Antwort generieren.",
+      created_at: new Date().toISOString(),
+    };
+    state.chatMessages.push(assistantMsg);
+    renderChatMessages();
+  } catch (err) {
+    removeTypingIndicator();
+    const errorMsg = {
+      role: "assistant",
+      content: "Verbindungsfehler zum AI-Server. Bitte versuche es spaeter erneut.",
+      created_at: new Date().toISOString(),
+    };
+    state.chatMessages.push(errorMsg);
+    renderChatMessages();
+  }
+
+  state.chatLoading = false;
 }
 
 // === Push Notifications ===

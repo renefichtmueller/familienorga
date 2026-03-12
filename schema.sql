@@ -68,3 +68,13 @@ CREATE INDEX IF NOT EXISTS idx_items_due ON items(due_date);
 CREATE INDEX IF NOT EXISTS idx_notes_household ON notes(household_id);
 CREATE INDEX IF NOT EXISTS idx_items_assigned ON items(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_members_household ON members(household_id);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id TEXT PRIMARY KEY,
+  household_id TEXT NOT NULL REFERENCES households(id),
+  role TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_household ON chat_messages(household_id);
