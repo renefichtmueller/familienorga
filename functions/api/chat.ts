@@ -144,7 +144,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // Determine Ollama endpoint: proxy worker (production) or direct (local dev)
     const proxyUrl = context.env.OLLAMA_PROXY_URL;
-    const ollamaUrl = proxyUrl || context.env.OLLAMA_URL || "http://192.168.178.213:11434";
+    const ollamaUrl = proxyUrl || context.env.OLLAMA_URL || "http://localhost:11434";
     const fetchHeaders: Record<string, string> = { ...headers };
 
     if (proxyUrl && context.env.OLLAMA_PROXY_KEY) {
