@@ -1,0 +1,20 @@
+{
+  "name": "familienorga",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler pages dev public/ --d1=DB",
+    "deploy": "wrangler pages deploy public/ --project-name einkaufsliste",
+    "db:create": "wrangler d1 create einkaufsliste",
+    "db:schema": "wrangler d1 execute einkaufsliste --file=schema.sql",
+    "db:schema:local": "wrangler d1 execute einkaufsliste --file=schema.sql --local"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250310.0",
+    "typescript": "^5.7.3",
+    "wrangler": "^4.6.0"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}

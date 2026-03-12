@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#7c9a82">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Familienorga">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <title>Familienorga</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- Welcome Screen -->
+    <div id="view-welcome" class="view">
+      <div class="welcome-container">
+        <div class="welcome-icon">&#x1F3E0;</div>
+        <h1>Familienorga</h1>
+        <p class="subtitle">Einkauf, Termine & mehr — gemeinsam organisiert.</p>
+
+        <div class="welcome-actions">
+          <input type="text" id="input-family-name" placeholder="Familienname (z.B. M&uuml;ller)"
+                 autocomplete="off" spellcheck="false" style="margin-bottom: 0.75rem;">
+          <button id="btn-create" class="btn btn-primary btn-large">
+            Haushalt erstellen
+          </button>
+
+          <div class="divider">
+            <span>oder</span>
+          </div>
+
+          <div class="join-form">
+            <input type="text" id="input-code" placeholder="Code eingeben"
+                   maxlength="6" autocomplete="off" autocapitalize="characters"
+                   spellcheck="false">
+            <button id="btn-join" class="btn btn-secondary">Beitreten</button>
+          </div>
+          <p id="join-error" class="error-text"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Share Code Screen -->
+    <div id="view-share" class="view hidden">
+      <div class="welcome-container">
+        <div class="welcome-icon">&#x2705;</div>
+        <h1>Geschafft!</h1>
+        <p class="subtitle">Teile diesen Code mit deiner Familie:</p>
+
+        <div class="share-code" id="share-code-display"></div>
+        <button id="btn-copy-code" class="btn btn-secondary">Code kopieren</button>
+
+        <button id="btn-to-lists" class="btn btn-primary btn-large" style="margin-top: 2rem;">
+          Los geht's
+        </button>
+      </div>
+    </div>
+
+    <!-- Lists Overview -->
+    <div id="view-lists" class="view hidden">
+      <header class="app-header">
+        <h1 id="header-title">&#x1F3E0; Familienorga</h1>
+        <button id="btn-settings" class="btn-icon" title="Einstellungen">&#x2699;&#xFE0F;</button>
+      </header>
+
+      <div id="lists-container" class="lists-container"></div>
+
+      <button id="btn-add-list" class="fab" title="Neue Liste">+</button>
+
+      <!-- New List Modal -->
+      <div id="modal-new-list" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+          <h2>Neue Liste</h2>
+          <label class="input-label">Kategorie</label>
+          <div class="category-picker" id="category-picker"></div>
+          <input type="text" id="input-new-category" placeholder="Neue Kategorie..." autocomplete="off" class="hidden">
+          <label class="input-label mt-1">Emoji</label>
+          <div class="emoji-picker" id="emoji-picker"></div>
+          <label class="input-label mt-1">Name</label>
+          <input type="text" id="input-list-name" placeholder="Name der Liste" autocomplete="off">
+          <div class="modal-actions">
+            <button class="btn btn-secondary modal-cancel">Abbrechen</button>
+            <button id="btn-create-list" class="btn btn-primary">Erstellen</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings Modal -->
+      <div id="modal-settings" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+          <h2>Einstellungen</h2>
+          <div class="setting-row">
+            <span class="setting-label">Dein Haushalt-Code</span>
+            <span class="setting-value" id="settings-code"></span>
+          </div>
+          <button id="btn-copy-settings-code" class="btn btn-secondary" style="width:100%; margin-bottom: 1rem;">Code kopieren</button>
+
+          <div class="setting-section">
+            <label class="input-label">Familienmitglieder</label>
+            <div id="members-list" class="members-list"></div>
+            <div class="add-member-row">
+              <input type="text" id="input-new-member" placeholder="Name hinzufuegen..." autocomplete="off">
+              <button id="btn-add-member" class="btn btn-primary btn-add-member">+</button>
+            </div>
+          </div>
+
+          <button id="btn-leave" class="btn btn-danger" style="width:100%;">Haushalt verlassen</button>
+          <div class="modal-actions">
+            <button class="btn btn-secondary modal-cancel">Schliessen</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- List Detail -->
+    <div id="view-detail" class="view hidden">
+      <header class="app-header">
+        <button id="btn-back" class="btn-icon btn-back">&#x2190;</button>
+        <h1 id="detail-title"></h1>
+        <button id="btn-delete-list" class="btn-icon btn-danger-icon" title="Liste loeschen">&#x1F5D1;&#xFE0F;</button>
+      </header>
+
+      <div class="add-item-bar">
+        <input type="text" id="input-new-item" placeholder="Artikel hinzufuegen..."
+               autocomplete="off" enterkeyhint="done">
+        <button id="btn-add-item" class="btn btn-primary btn-add">+</button>
+      </div>
+      <div id="add-item-date-row" class="add-item-date-row hidden">
+        <input type="date" id="input-item-date">
+        <input type="time" id="input-item-time">
+        <select id="input-item-recurrence">
+          <option value="">Einmalig</option>
+          <option value="weekly">Woechentlich</option>
+          <option value="monthly">Monatlich</option>
+          <option value="yearly">Jaehrlich</option>
+        </select>
+      </div>
+      <div id="add-item-assign-row" class="add-item-assign-row hidden">
+        <span id="assign-label" class="assign-label">Fuer:</span>
+        <select id="input-item-assign">
+          <option value="">Alle</option>
+        </select>
+      </div>
+
+      <div id="items-container" class="items-container"></div>
+
+      <div id="empty-list" class="empty-state hidden">
+        <div class="empty-icon">&#x1F4DD;</div>
+        <p>Noch keine Eintraege.</p>
+        <p class="subtitle">Fuege oben deinen ersten Eintrag hinzu!</p>
+      </div>
+
+      <!-- Confirm Delete Modal -->
+      <div id="modal-delete-list" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+          <h2>Liste loeschen?</h2>
+          <p>Alle Eintraege in dieser Liste werden geloescht.</p>
+          <div class="modal-actions">
+            <button class="btn btn-secondary modal-cancel">Abbrechen</button>
+            <button id="btn-confirm-delete-list" class="btn btn-danger">Loeschen</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notes Overview -->
+    <div id="view-notes" class="view hidden">
+      <header class="app-header">
+        <button id="btn-notes-back" class="btn-icon btn-back">&#x2190;</button>
+        <h1>&#x1F4DD; Notizen</h1>
+        <button id="btn-add-note" class="btn-icon" title="Neue Notiz" style="font-size:1.8rem;">+</button>
+      </header>
+
+      <div id="notes-container" class="notes-container"></div>
+
+      <div id="empty-notes" class="empty-state hidden">
+        <div class="empty-icon">&#x1F4DD;</div>
+        <p>Noch keine Notizen.</p>
+        <p class="subtitle">Erstelle deine erste Notiz!</p>
+      </div>
+
+      <!-- New Note Modal -->
+      <div id="modal-new-note" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+          <h2>Neue Notiz</h2>
+          <input type="text" id="input-note-title" placeholder="Titel der Notiz" autocomplete="off">
+          <div class="modal-actions">
+            <button class="btn btn-secondary modal-cancel">Abbrechen</button>
+            <button id="btn-create-note" class="btn btn-primary">Erstellen</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Note Detail -->
+    <div id="view-note-detail" class="view hidden">
+      <header class="app-header">
+        <button id="btn-note-back" class="btn-icon btn-back">&#x2190;</button>
+        <h1 id="note-detail-title"></h1>
+        <button id="btn-delete-note" class="btn-icon btn-danger-icon" title="Notiz loeschen">&#x1F5D1;&#xFE0F;</button>
+      </header>
+
+      <div class="note-toolbar">
+        <button id="btn-pin-note" class="btn btn-secondary btn-sm">&#x1F4CC; Anpinnen</button>
+      </div>
+
+      <div class="note-editor">
+        <textarea id="note-content" placeholder="Hier schreiben..."></textarea>
+      </div>
+
+      <!-- Confirm Delete Note Modal -->
+      <div id="modal-delete-note" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+          <h2>Notiz loeschen?</h2>
+          <p>Diese Notiz wird unwiderruflich geloescht.</p>
+          <div class="modal-actions">
+            <button class="btn btn-secondary modal-cancel">Abbrechen</button>
+            <button id="btn-confirm-delete-note" class="btn btn-danger">Loeschen</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

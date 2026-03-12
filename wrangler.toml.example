@@ -1,0 +1,13 @@
+name = "einkaufsliste"
+pages_build_output_dir = "public"
+compatibility_date = "2025-03-10"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+VAPID_PUBLIC_KEY = "YOUR_VAPID_PUBLIC_KEY"
+VAPID_SUBJECT = "mailto:you@example.com"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "einkaufsliste"
+database_id = "YOUR_D1_DATABASE_ID"
