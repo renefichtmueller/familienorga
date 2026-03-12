@@ -1,9 +1,9 @@
 interface Env {
   DB: D1Database;
-  OLLAMA_URL: string;
-  OLLAMA_API_KEY: string;
-  CF_ACCESS_CLIENT_ID?: string;
-  CF_ACCESS_CLIENT_SECRET?: string;
+  OLLAMA_PROXY_URL?: string;
+  OLLAMA_PROXY_KEY?: string;
+  OLLAMA_URL?: string;
+  OLLAMA_API_KEY?: string;
 }
 
 interface ChatMessage {
@@ -119,8 +119,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     { role: "user", content: body.message.trim() },
   ];
 
-  // Call Ollama via tunnel
-  const ollamaUrl = context.env.OLLAMA_URL || "https://ollama.fichtmueller.org";
+  // Build request body
+  const reqBody = JSON.stringify({
+    model: "qwen2.5:7b",
+    messages,
+    stream: false,
+    options: {
+      temperature: 0.7,
+      num_predict: 512,
+    },
+  });
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
@@ -130,25 +139,26 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     headers["x-ollama-key"] = context.env.OLLAMA_API_KEY;
   }
 
-  // Add Cloudflare Access service token if configured
-  if (context.env.CF_ACCESS_CLIENT_ID && context.env.CF_ACCESS_CLIENT_SECRET) {
-    headers["CF-Access-Client-Id"] = context.env.CF_ACCESS_CLIENT_ID;
-    headers["CF-Access-Client-Secret"] = context.env.CF_ACCESS_CLIENT_SECRET;
-  }
-
   try {
-    const ollamaResponse = await fetch(`${ollamaUrl}/api/chat`, {
+    let ollamaResponse: Response;
+
+    // Determine Ollama endpoint: proxy worker (production) or direct (local dev)
+    const proxyUrl = context.env.OLLAMA_PROXY_URL;
+    const ollamaUrl = proxyUrl || context.env.OLLAMA_URL || "http://192.168.178.213:11434";
+    const fetchHeaders: Record<string, string> = { ...headers };
+
+    if (proxyUrl && context.env.OLLAMA_PROXY_KEY) {
+      // Authenticate with proxy worker
+      fetchHeaders["x-proxy-key"] = context.env.OLLAMA_PROXY_KEY;
+    } else if (context.env.OLLAMA_API_KEY) {
+      // Direct Ollama access with API key
+      fetchHeaders["x-ollama-key"] = context.env.OLLAMA_API_KEY;
+    }
+
+    ollamaResponse = await fetch(`${ollamaUrl}/api/chat`, {
       method: "POST",
-      headers,
-      body: JSON.stringify({
-        model: "qwen2.5:7b",
-        messages,
-        stream: false,
-        options: {
-          temperature: 0.7,
-          num_predict: 512,
-        },
-      }),
+      headers: fetchHeaders,
+      body: reqBody,
     });
 
     if (!ollamaResponse.ok) {
